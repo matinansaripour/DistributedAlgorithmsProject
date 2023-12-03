@@ -1,9 +1,6 @@
 package cs451;
 
-import cs451.client.Client;
 import cs451.client.Manager;
-import cs451.client.ReceiverManager;
-import cs451.client.SendersManager;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
