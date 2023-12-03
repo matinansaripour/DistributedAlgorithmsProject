@@ -23,6 +23,7 @@ public class Manager extends Client{
     private ArrayList<TreeSet<Integer>> ackMessages = new ArrayList<>();
     private Log log;
     private HashMap<String, HashSet<Integer>> ackCount = new HashMap<>();
+    private HashMap<String, HashSet<Integer>> ackSendCount = new HashMap<>();
     private int[] tmpLog;
     private int lastSSent = -1;
 
@@ -80,16 +81,16 @@ public class Manager extends Client{
         return idToPort[id];
     }
 
-    public void addSavedMessage(SavedMessage savedMessage) {
-        synchronized (messageQueue){
-            messageQueue.add(savedMessage);
-        }
+    public synchronized void addSavedMessage(SavedMessage savedMessage) {
+        messageQueue.add(savedMessage);
+//        System.out.println("Added message " + savedMessage.getSenderId() + " " + savedMessage.getSequenceNumber() + " to queue");
+//        System.out.println(messageQueue);
     }
 
     public SavedMessage getMessage() throws Exception {
         int tmp;
         synchronized (this){
-            if (lastSSent <= 0){
+            if (lastSSent < 0){
                 lastSSent = messageQueue.size() - 1;
             }
             else {
@@ -100,7 +101,9 @@ public class Manager extends Client{
         if(tmp == -1){
             throw new Exception();
         }
-        return messageQueue.get(tmp);
+        SavedMessage message = messageQueue.get(tmp);
+//        System.out.println("Sending message " + message.getSenderId() + " " + message.getSequenceNumber());
+        return message;
     }
 
     private void processLog() {
@@ -132,25 +135,56 @@ public class Manager extends Client{
         int messageId = Integer.parseInt(strings[0]);
         SavedMessage savedMessage = null;
         int num;
-        synchronized (ackCount){
+        String key;
+        int idTmp = messageId;
+//        System.out.println("local: "+localBuffer);
+        if (messageId < 0){
+            messageId = -messageId;
+            key = messageId + " " + strings[1];
             HashSet<Integer> set;
-            if(ackCount.containsKey(messageId + " " + strings[1])){
-                set = ackCount.get(messageId + " " + strings[1]);
+            synchronized (ackSendCount){
+                if(ackSendCount.containsKey(key)){
+                    set = ackSendCount.get(key);
+                }
+                else {
+                    set = new HashSet<>();
+                    ackSendCount.put(key, set);
+                }
+                set.add(senderId);
+            }
+        }
+        else {
+            key = messageId + " " + strings[1];
+        }
+        HashSet<Integer> set;
+        boolean firstTime = true;
+        synchronized (ackCount){
+            if(ackCount.containsKey(key)){
+                set = ackCount.get(key);
             }
             else {
                 set = new HashSet<>();
-                ackCount.put(messageId + " " + strings[1], set);
-                savedMessage = new SavedMessage(senderId, first, localBuffer.getBytes());
-            }
-            set.add(senderId);
-            num = set.size();
-        }
-        if(num >= n / 2){
-            synchronized (idToAddress[senderId - 1]){
-                if(lastMessage[senderId - 1] < last){
-                    ackMessages.get(senderId - 1).add(last);
+                ackCount.put(key, set);
+                if (messageId != id){
+                    savedMessage = new SavedMessage(messageId, first, localBuffer.getBytes());
                 }
             }
+//            System.out.println("Received message " + messageId + " from " + senderId + " with first " + first + " and last " + last);
+//            System.out.println(savedMessage == null ? "Not saved" : "Saved");
+            if (set.contains(senderId)){
+                firstTime = false;
+            }
+            else {
+                set.add(senderId);
+            }
+            num = set.size();
+        }
+        if(firstTime && num == n / 2){
+            synchronized (idToAddress[messageId - 1]){
+                ackMessages.get(messageId - 1).add(last);
+            }
+            String ackString = idTmp < 0 ? localBuffer : ("-" + localBuffer);
+            addSavedMessage(new SavedMessage(messageId, first, ackString.getBytes()));
         }
         if(savedMessage != null){
             addSavedMessage(savedMessage);
@@ -161,10 +195,10 @@ public class Manager extends Client{
         for(int i = 0; i < n; i++){
             synchronized (idToAddress[i]){
                 TreeSet<Integer> acks = ackMessages.get(i);
-                if(acks.isEmpty()){
-                    continue;
-                }
                 while (true){
+                    if(acks.isEmpty()){
+                        break;
+                    }
                     int smallest = acks.first();
                     if(smallest - lastMessage[i] > messagePerPacket){
                         break;
@@ -185,12 +219,12 @@ public class Manager extends Client{
         lastSentLog = lastSent;
     }
 
-    public HashSet<Integer> getAckCount(String key){
+    public HashSet<Integer> getAckSendCount(String key){
         try {
-            return ackCount.get(key);
+            return ackSendCount.get(key);
         } catch (Exception e){
             try{
-                return ackCount.get(key);
+                return ackSendCount.get(key);
             } catch (Exception e1){
                 System.out.println("Error in getAckCount");
                 return new HashSet<>();

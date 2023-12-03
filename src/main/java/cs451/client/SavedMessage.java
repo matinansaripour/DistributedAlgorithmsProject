@@ -25,4 +25,8 @@ public class SavedMessage {
         return sequenceNumber;
     }
 
+    public String toString() {
+        return "SavedMessage(" + senderId + ", " + sequenceNumber + ", " + message + ")";
+    }
+
 }

@@ -10,7 +10,7 @@ public class Log {
     private FileOutputStream fos;
     private BufferedOutputStream bos;
     private OutputStreamWriter writer;
-    int chunkSize = 10 * 1024 * 1024;
+    int chunkSize = 20 * 1024 * 1024;
 
     public Log(String outputPath) throws FileNotFoundException {
         fos = new FileOutputStream(outputPath);

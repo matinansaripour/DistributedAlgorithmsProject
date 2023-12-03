@@ -34,9 +34,7 @@ public class Sender extends Thread {
                 messageToSend.append(" ").append(i);
             }
             byte[] buf = messageToSend.toString().getBytes();
-            int tmp = lastMessage;
-            lastMessage = message;
-            manager.logSentMessages(lastMessage);
+            manager.logSentMessages(message);
             for(int i = 0; i < n; i++){
                 int receiverId = i + 1;
                 if(receiverId == id){
@@ -47,11 +45,10 @@ public class Sender extends Thread {
                 DatagramPacket packet = new DatagramPacket(buf, buf.length, address, port);
                 try {
                     socket.send(packet);
-                } catch (IOException e) {
-                    continue;
-                }
-                manager.addSavedMessage(new SavedMessage(id, tmp, buf));
+                } catch (IOException e) {}
             }
+            manager.addSavedMessage(new SavedMessage(id, lastMessage + 1, buf));
+            lastMessage = message;
         }
         SavedMessage message;
         while (true) {
@@ -63,13 +60,13 @@ public class Sender extends Thread {
                 } catch (InterruptedException ignored) {}
                 continue;
             }
-            HashSet<Integer> set = manager.getAckCount(message.getSenderId() + " " + message.getSequenceNumber());
+            HashSet<Integer> set = manager.getAckSendCount(message.getSenderId() + " " + message.getSequenceNumber());
             for (int i = 0; i < n; i++) {
                 if (i + 1 == id) {
                     continue;
                 }
                 try{
-                    if(set.contains(i + 1)) {
+                    if(set != null && set.contains(i + 1)) {
                         continue;
                     }
                 } catch (Exception e) {}
