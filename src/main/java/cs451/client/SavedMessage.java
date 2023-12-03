@@ -1,6 +1,5 @@
 package cs451.client;
 
-import java.net.InetAddress;
 
 public class SavedMessage {
     private byte[] message;
