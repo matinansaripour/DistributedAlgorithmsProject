@@ -2,43 +2,49 @@ package cs451.client;
 
 import java.io.IOException;
 import java.net.*;
+import java.util.HashSet;
 
 public class SSender extends Thread {
 
     private final DatagramSocket socket;
-    private InetAddress receiverAddress;
-    private int receiverPort;
-    private SendersManager sendersManager;
-    public SSender(DatagramSocket socket, String receiverAddress, int receiverPort, SendersManager sendersManager) throws SocketException, UnknownHostException {
+    private Manager manager;
+    private int id;
+    private int n;
+    public SSender(int id, int n, DatagramSocket socket, Manager manager){
         this.socket = socket;
-        this.receiverAddress = InetAddress.getByName(receiverAddress);
-        this.receiverPort = receiverPort;
-        this.sendersManager = sendersManager;
+        this.manager = manager;
+        this.id = id;
+        this.n = n;
     }
 
     public void run() {
-        byte[] buf;
+        SavedMessage message;
         while (true) {
-            if (sendersManager.senderIsAlive()){
-                try {
-                    Thread.sleep(1);
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-            }
             try {
-                buf = sendersManager.getSMessage();
+                message = manager.getMessage();
             }catch (Exception e){
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException ignored) {}
                 continue;
             }
+            HashSet<Integer> set = manager.getAckCount(message.getSenderId() + " " + message.getSequenceNumber());
+            for (int i = 0; i < n; i++) {
+                if (i + 1 == id) {
+                    continue;
+                }
+                try{
+                    if(set.contains(i + 1)) {
+                        continue;
+                    }
+                } catch (Exception ignored) {}
 
-            DatagramPacket packet = new DatagramPacket(buf, buf.length, receiverAddress, receiverPort);
-            synchronized (socket) {
+                InetAddress address = manager.getAddress(i);
+                int port = manager.getPort(i);
+                DatagramPacket packet = new DatagramPacket(message.getMessage(), message.getMessage().length, address, port);
                 try {
                     socket.send(packet);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
+                } catch (IOException ignored) {}
             }
         }
     }

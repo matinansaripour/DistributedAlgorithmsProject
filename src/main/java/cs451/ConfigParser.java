@@ -8,7 +8,6 @@ import java.io.IOException;
 public class ConfigParser {
     private static final String SPACES_REGEX = "\\s+";
     private int m;
-    private byte receiverId;
     private String path;
 
     public boolean populate(String value) {
@@ -18,13 +17,12 @@ public class ConfigParser {
         try(BufferedReader br = new BufferedReader(new FileReader(path))) {
             String line = br.readLine();
             String[] splits = line.split(SPACES_REGEX);
-            if (splits.length != 2) {
+            if (splits.length != 1) {
                 System.err.println("Problem with the configs file!");
                 return false;
             }
 
             m = Integer.parseInt(splits[0]);
-            receiverId = Byte.parseByte(splits[1]);
         } catch (IOException e) {
             System.err.println("Problem with the configs file!");
             return false;
@@ -39,10 +37,6 @@ public class ConfigParser {
 
     public int getM(){
         return m;
-    }
-
-    public byte getReceiverId(){
-        return receiverId;
     }
 
 }

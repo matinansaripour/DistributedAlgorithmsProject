@@ -5,33 +5,24 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 class Receiver extends Thread {
     private final DatagramSocket socket;
-    private final ReceiverManager receiverManager;
-    private String localBuffer;
-    private byte[] buf = new byte[128];
+    private final Manager manager;
+    private final byte[] buf = new byte[256];
 
-    public Receiver(DatagramSocket socket, ReceiverManager receiverManager) {
+    public Receiver(DatagramSocket socket, Manager manager) {
         this.socket = socket;
-        this.receiverManager = receiverManager;
+        this.manager = manager;
     }
 
     public void run() {
         DatagramPacket packet = new DatagramPacket(buf, buf.length);
         while (true) {
-            //todo
-            synchronized (socket) {
-                try {
-                    socket.receive(packet);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
+            try {
+                socket.receive(packet);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
-            localBuffer = new String(packet.getData(), 0, packet.getLength());
-            receiverManager.addToBuffer(localBuffer);
+            String localBuffer = new String(packet.getData(), 0, packet.getLength());
+            manager.handleReceivedMessage(localBuffer, packet.getAddress(), packet.getPort());
         }
-    }
-
-
-    public String getLocalBuffer() {
-        return localBuffer;
     }
 }
