@@ -29,9 +29,6 @@ public class Sender extends Thread {
                     Thread.sleep(500);
                 } catch (InterruptedException ignored) {}
             }
-//            try {
-//                Thread.sleep(1);
-//            } catch (InterruptedException ignored) {}
             int message = Math.min(lastMessage + messagePerPacket, m);
             if(lastMessage >= message){
                 break;
@@ -63,9 +60,6 @@ public class Sender extends Thread {
             try {
                 message = manager.getMessage();
             }catch (Exception e){
-//                try {
-//                    Thread.sleep(100);
-//                } catch (InterruptedException ignored) {}
                 continue;
             }
             HashSet<Integer> set = manager.getAckSendCount(message.getSenderId() + " " + message.getSequenceNumber());

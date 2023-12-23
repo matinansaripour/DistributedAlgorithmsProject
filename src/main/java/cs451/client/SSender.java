@@ -29,7 +29,6 @@ public class SSender extends Thread {
                 continue;
             }
             HashSet<Integer> set = manager.getAckSendCount(message.getSenderId() + " " + message.getSequenceNumber());
-//            System.out.println("SSender " + message.getSenderId() + " " + message.getSequenceNumber() + ": " + set);
             for (int i = 0; i < n; i++) {
                 if (i + 1 == id) {
                     continue;
@@ -39,7 +38,6 @@ public class SSender extends Thread {
                         continue;
                     }
                 } catch (Exception ignored) {}
-//                System.out.println("Sending SSender " + message.getSenderId() + " " + message.getSequenceNumber() + " to " + (i + 1));
                 InetAddress address = manager.getAddress(i);
                 int port = manager.getPort(i);
                 DatagramPacket packet = new DatagramPacket(message.getMessage(), message.getMessage().length, address, port);

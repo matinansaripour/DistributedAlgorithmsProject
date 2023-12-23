@@ -84,8 +84,6 @@ public class Manager extends Client{
 
     public synchronized void addSavedMessage(SavedMessage savedMessage) {
         messageQueue.add(savedMessage);
-//        System.out.println("Added message " + savedMessage.getSenderId() + " " + savedMessage.getSequenceNumber() + " to queue");
-//        System.out.println(messageQueue);
     }
 
     public SavedMessage getMessage() throws Exception {
@@ -103,7 +101,6 @@ public class Manager extends Client{
             throw new Exception();
         }
         SavedMessage message = messageQueue.get(tmp);
-//        System.out.println("Sending message " + message.getSenderId() + " " + message.getSequenceNumber());
         return message;
     }
 
@@ -138,7 +135,6 @@ public class Manager extends Client{
         int num;
         String key;
         int idTmp = messageId;
-//        System.out.println("local: "+localBuffer);
         if (messageId < 0){
             messageId = -messageId;
             key = messageId + " " + strings[1];
@@ -169,8 +165,6 @@ public class Manager extends Client{
                         savedMessage = new SavedMessage(messageId, first, localBuffer.getBytes());
                     }
                 }
-//            System.out.println("Received message " + messageId + " from " + senderId + " with first " + first + " and last " + last);
-//            System.out.println(savedMessage == null ? "Not saved" : "Saved");
                 if (set.contains(senderId)){
                     firstTime = false;
                 }
