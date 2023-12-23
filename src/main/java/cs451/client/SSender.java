@@ -23,9 +23,9 @@ public class SSender extends Thread {
             try {
                 message = manager.getMessage();
             }catch (Exception e){
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException ignored) {}
+//                try {
+//                    Thread.sleep(100);
+//                } catch (InterruptedException ignored) {}
                 continue;
             }
             HashSet<Integer> set = manager.getAckSendCount(message.getSenderId() + " " + message.getSequenceNumber());

@@ -62,30 +62,6 @@ public class Main {
         System.out.println(parser.config() + "\n");
 
         System.out.println("Doing some initialization\n");
-//        int port = 0;
-//        if(parser.myId() == parser.config().getReceiverId()){
-//            for (Host host: parser.hosts()) {
-//                if (host.getId() == parser.myId()){
-//                    port = host.getPort();
-//                    break;
-//                }
-//            }
-//            client = new ReceiverManager(parser.myId(), port, 7, parser.output());
-//        }
-//        else {
-//            String receiverAddress = null;
-//            int receiverPort = 0;
-//            for (Host host: parser.hosts()) {
-//                if (host.getId() == parser.myId()){
-//                    port = host.getPort();
-//                }
-//                if (host.getId() == parser.config().getReceiverId()){
-//                    receiverAddress = host.getIp();
-//                    receiverPort = host.getPort();
-//                }
-//            }
-//            client = new SendersManager(parser.myId(), parser.config().getM(), port, receiverAddress, receiverPort, 6, parser.output());
-//        }
         ArrayList<Host> hosts = (ArrayList<Host>) parser.hosts();
         int port = 0;
         int n = hosts.size();

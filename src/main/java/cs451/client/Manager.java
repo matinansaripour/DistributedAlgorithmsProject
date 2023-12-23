@@ -1,6 +1,7 @@
 package cs451.client;
 
 import java.io.FileNotFoundException;
+import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
@@ -155,40 +156,49 @@ public class Manager extends Client{
         }
         else {
             key = messageId + " " + strings[1];
-        }
-        HashSet<Integer> set;
-        boolean firstTime = true;
-        synchronized (ackCount){
-            if(ackCount.containsKey(key)){
-                set = ackCount.get(key);
-            }
-            else {
-                set = new HashSet<>();
-                ackCount.put(key, set);
-                if (messageId != id){
-                    savedMessage = new SavedMessage(messageId, first, localBuffer.getBytes());
+            HashSet<Integer> set;
+            boolean firstTime = true;
+            synchronized (ackCount){
+                if(ackCount.containsKey(key)){
+                    set = ackCount.get(key);
                 }
-            }
+                else {
+                    set = new HashSet<>();
+                    ackCount.put(key, set);
+                    if (messageId != id){
+                        savedMessage = new SavedMessage(messageId, first, localBuffer.getBytes());
+                    }
+                }
 //            System.out.println("Received message " + messageId + " from " + senderId + " with first " + first + " and last " + last);
 //            System.out.println(savedMessage == null ? "Not saved" : "Saved");
-            if (set.contains(senderId)){
-                firstTime = false;
+                if (set.contains(senderId)){
+                    firstTime = false;
+                }
+                else {
+                    set.add(senderId);
+                }
+                num = set.size();
             }
-            else {
-                set.add(senderId);
+            if(firstTime && num == n / 2){
+                synchronized (idToAddress[messageId - 1]){
+                    ackMessages.get(messageId - 1).add(last);
+                }
             }
-            num = set.size();
-        }
-        if(firstTime && num == n / 2){
-            synchronized (idToAddress[messageId - 1]){
-                ackMessages.get(messageId - 1).add(last);
+            if(savedMessage != null){
+                addSavedMessage(savedMessage);
             }
             String ackString = idTmp < 0 ? localBuffer : ("-" + localBuffer);
-            addSavedMessage(new SavedMessage(messageId, first, ackString.getBytes()));
+            sendAck(ackString.getBytes(), senderId);
         }
-        if(savedMessage != null){
-            addSavedMessage(savedMessage);
-        }
+    }
+
+    private void sendAck(byte[] buf, int senderId) {
+        InetAddress address = idToAddress[senderId - 1];
+        int port = idToPort[senderId - 1];
+        DatagramPacket packet = new DatagramPacket(buf, buf.length, address, port);
+        try {
+            socket.send(packet);
+        } catch (Exception ignored) {}
     }
 
     public void handleAckMessages() {
