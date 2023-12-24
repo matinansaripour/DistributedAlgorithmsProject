@@ -20,6 +20,7 @@ public class Proposal {
         this.proposedValues = new HashSet<>();
         this.proposedValues.addAll(proposedValues);
         this.activeProposalNumber = 0;
+        this.delivered = new HashSet<>();
         this.active = true;
         this.ackCount = new HashSet<>();
         this.nackCount = new HashSet<>();
@@ -29,7 +30,7 @@ public class Proposal {
             message.append(value).append(" ");
         }
         message.deleteCharAt(message.length() - 1);
-        messageToSend.append(proposalId).append(" ").append(activeProposalNumber).append(" ").append(message);
+        messageToSend.append("0 ").append(proposalId).append(" ").append(activeProposalNumber).append(" ").append(message);
     }
 
     public int getProposalId() {
@@ -65,7 +66,7 @@ public class Proposal {
         nackCount.clear();
         ++this.activeProposalNumber;
         messageToSend.setLength(0);
-        messageToSend.append(proposalId).append(" ").append(activeProposalNumber).append(" ").append(message);
+        messageToSend.append("0 ").append(proposalId).append(" ").append(activeProposalNumber).append(" ").append(message);
     }
 
     public void setActive(boolean active) {
@@ -104,5 +105,20 @@ public class Proposal {
 
     public boolean isAcked(int id) {
         return (ackCount.contains(id) || nackCount.contains(id));
+    }
+
+    @Override
+    public String toString() {
+        return "Proposal{" +
+                "proposedValues=" + proposedValues +
+                ", proposalId=" + proposalId +
+                ", activeProposalNumber=" + activeProposalNumber +
+                ", active=" + active +
+                ", ackCount=" + ackCount +
+                ", nackCount=" + nackCount +
+                ", delivered=" + delivered +
+                ", message=" + message +
+                ", messageToSend=" + messageToSend +
+                '}';
     }
 }

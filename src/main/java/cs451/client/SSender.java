@@ -21,7 +21,7 @@ public class SSender extends Thread {
             Proposal proposal = manager.getProposal();
             String messageToSend = proposal.getMessageToSend();
             for(int i = 0; i < n; i++){
-                if(i == id){
+                if(i == id - 1){
                     continue;
                 }
                 if(!proposal.isActive() && proposal.isDelivered(i)){

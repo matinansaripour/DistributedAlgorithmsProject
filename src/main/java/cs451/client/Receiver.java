@@ -3,10 +3,13 @@ package cs451.client;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+
+import static cs451.Parameters.MAX_PACKET_SIZE;
+
 class Receiver extends Thread {
     private final DatagramSocket socket;
     private final Manager manager;
-    private final byte[] buf = new byte[3300];
+    private final byte[] buf = new byte[MAX_PACKET_SIZE];
 
     public Receiver(DatagramSocket socket, Manager manager) {
         this.socket = socket;

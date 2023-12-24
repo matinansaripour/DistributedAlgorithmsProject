@@ -53,7 +53,9 @@ public class Manager extends Client{
         iterator = isHere.iterator();
         log = new Log(outputPath);
         processResponses = new HashMap[n];
-
+        for (int i = 0; i < n; i++){
+            processResponses[i] = new HashMap<>();
+        }
         loadNext();
     }
 
@@ -67,7 +69,11 @@ public class Manager extends Client{
             Receiver receiver = new Receiver(socket, this);
             receiver.start();
         }
+        for (Proposal proposal : proposals.values()){
+//            System.out.println(proposal);
+        }
         while (true){
+//            System.out.println("Finished: " + finished + " Last: " + last + " LastCleaned: " + lastCleaned);
             try {
                 Thread.sleep(300);
             } catch (InterruptedException ignored) {}
@@ -105,6 +111,7 @@ public class Manager extends Client{
     }
 
     public void checkDecide(Proposal proposal){
+//        System.out.println(proposal);
         if (!proposal.isActive()){
             return;
         }
@@ -123,6 +130,7 @@ public class Manager extends Client{
         String[] strings = localBuffer.split(",");
         int senderId = addressToId.get(address.getHostAddress() + " " + port);
         StringBuilder ackNaks = new StringBuilder();
+//        System.out.println("Received from " + senderId + " " + localBuffer);
 
         for (int i = 0; i < strings.length; i++){
             String[] request = strings[i].split(" ");
@@ -138,7 +146,7 @@ public class Manager extends Client{
                     }
                 }
                 synchronized (set){
-                    set.add(senderId);
+                    set.add(senderId - 1);
                 }
                 ackNaks.append("-3 ").append(proposalId).append(",");
                 continue;
@@ -149,8 +157,9 @@ public class Manager extends Client{
                     continue;
                 }
                 synchronized (proposal){
-                    proposal.addDelivered(senderId);
+                    proposal.addDelivered(senderId - 1);
                 }
+                continue;
             }
             int proposalNumber = Integer.parseInt(request[2]);
             if (type == 0){
@@ -170,6 +179,7 @@ public class Manager extends Client{
                         synchronized (acBuffer){
                             ackNaks.append("2 ").append(proposalId).append(" ").append(proposalNumber).append(" ").append(acBuffer).append(",");
                         }
+//                        System.out.println(ackNaks);
                     }
                 } catch (Exception e) {}
             }
@@ -184,7 +194,7 @@ public class Manager extends Client{
                     }
                     if (type == 1){
                         //ack
-                        proposal.addAckCount(senderId);
+                        proposal.addAckCount(senderId - 1);
                     }
                     else if (type == 2){
                         //nack
@@ -193,7 +203,7 @@ public class Manager extends Client{
                             set.add(Integer.parseInt(request[j]));
                         }
                         proposal.addProposedValue(set);
-                        proposal.addNackCount(senderId);
+                        proposal.addNackCount(senderId - 1);
                     }
                     processResponses[senderId - 1].put(proposalId, proposalNumber);
                     checkDecide(proposal);
@@ -221,11 +231,19 @@ public class Manager extends Client{
             return;
         }
         StringBuilder stringBuilder = new StringBuilder();
+//        System.out.println("Last: " + last + " " + proposal.isActive());
         while (!proposal.isActive()){
             stringBuilder.append(proposal.getMessage().append('\n'));
+//            System.out.println(proposal.getMessage());
             last++;
+            proposal = proposals.getOrDefault(last, null);
+            if (proposal == null){
+                break;
+            }
         }
-        log.add(stringBuilder);
+        if (stringBuilder.length() > 0){
+            log.add(stringBuilder);
+        }
     }
 
     public boolean acceptorCheck(ArrayList<Integer> set, int proposalId) throws Exception {
@@ -234,17 +252,18 @@ public class Manager extends Client{
         if (acSet == null || acBuffer == null){
             throw new Exception("Acceptor not found");
         }
-        synchronized (acSet){
+        synchronized (acBuffer){
             boolean ack = true;
             for (int value : set) {
                 if (!acSet.contains(value)) {
                     acSet.add(value);
-                    synchronized (acBuffer){
-                        acBuffer.append(" ").append(value);
-                    }
+                    acBuffer.append(value).append(" ");
                     ack = false;
                 }
             }
+//            if (!ack){
+////                acBuffer.deleteCharAt(acBuffer.length() - 1);
+//            }
             return ack;
         }
     }
