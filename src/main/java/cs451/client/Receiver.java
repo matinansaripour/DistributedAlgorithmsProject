@@ -6,7 +6,7 @@ import java.net.DatagramSocket;
 class Receiver extends Thread {
     private final DatagramSocket socket;
     private final Manager manager;
-    private final byte[] buf = new byte[256];
+    private final byte[] buf = new byte[3300];
 
     public Receiver(DatagramSocket socket, Manager manager) {
         this.socket = socket;

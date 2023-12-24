@@ -1,5 +1,6 @@
 package cs451;
 
+import java.io.IOException;
 import java.util.List;
 
 public class Parser {
@@ -15,7 +16,7 @@ public class Parser {
         this.args = args;
     }
 
-    public void parse() {
+    public void parse() throws IOException {
         pid = ProcessHandle.current().pid();
 
         idParser = new IdParser();
@@ -44,7 +45,7 @@ public class Parser {
             help();
         }
 
-        if (!configParser.populate(args[Constants.CONFIG_VALUE])) {
+        if (!ConfigParser.populate(args[Constants.CONFIG_VALUE], hostsParser.getHosts().size())) {
             help();
         }
     }

@@ -11,9 +11,9 @@ public class Log {
     public Log(String outputPath) throws FileNotFoundException {
         out = new FileOutputStream(outputPath);
     }
-    public synchronized void add(StringBuilder stringBuilder, boolean isSent) {
+    public synchronized void add(StringBuilder stringBuilder) {
         stringLog.append(stringBuilder);
-        if (isSent && stringLog.length() > chunkSize) {
+        if (stringLog.length() > chunkSize) {
             try {
                 out.write(stringLog.toString().getBytes());
             } catch (Exception e) {}

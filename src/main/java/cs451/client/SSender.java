@@ -2,7 +2,6 @@ package cs451.client;
 
 import java.io.IOException;
 import java.net.*;
-import java.util.HashSet;
 
 public class SSender extends Thread {
 
@@ -18,32 +17,27 @@ public class SSender extends Thread {
     }
 
     public void run() {
-        SavedMessage message;
         while (true) {
-            try {
-                message = manager.getMessage();
-            }catch (Exception e){
-//                try {
-//                    Thread.sleep(100);
-//                } catch (InterruptedException ignored) {}
-                continue;
-            }
-            HashSet<Integer> set = manager.getAckSendCount(message.getSenderId() + " " + message.getSequenceNumber());
-            for (int i = 0; i < n; i++) {
-                if (i + 1 == id) {
+            Proposal proposal = manager.getProposal();
+            String messageToSend = proposal.getMessageToSend();
+            for(int i = 0; i < n; i++){
+                if(i == id){
                     continue;
                 }
-                try{
-                    if(set != null && set.contains(i + 1)) {
-                        continue;
-                    }
-                } catch (Exception ignored) {}
+                if(!proposal.isActive() && proposal.isDelivered(i)){
+                    continue;
+                }
+                if(proposal.isAcked(i) && proposal.isActive()){
+                    continue;
+                }
                 InetAddress address = manager.getAddress(i);
                 int port = manager.getPort(i);
-                DatagramPacket packet = new DatagramPacket(message.getMessage(), message.getMessage().length, address, port);
+                byte[] message = messageToSend.getBytes();
+                DatagramPacket packet = new DatagramPacket(message, message.length, address, port);
                 try {
                     socket.send(packet);
                 } catch (IOException ignored) {}
+
             }
         }
     }

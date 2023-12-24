@@ -19,6 +19,7 @@ public class Main {
         //write/flush output file if necessary
         System.out.println("Writing output.");
         manager.clearBuffer();
+        ConfigParser.closeFile();
     }
 
     private static void initSignalHandlers() {
@@ -31,7 +32,7 @@ public class Main {
         }));
     }
 
-    public static void main(String[] args) throws SocketException, FileNotFoundException, UnknownHostException {
+    public static void main(String[] args) throws IOException {
         Parser parser = new Parser(args);
         parser.parse();
 
@@ -76,7 +77,7 @@ public class Main {
                 port = host.getPort();
             }
         }
-        manager = new Manager(parser.myId(), parser.config().getM(), n, port, addressToId, idToAddress, idToPort, parser.output());
+        manager = new Manager(parser.myId(), n, port, addressToId, idToAddress, idToPort, parser.output());
 
         System.out.println("Broadcasting and delivering messages...\n");
         manager.run();

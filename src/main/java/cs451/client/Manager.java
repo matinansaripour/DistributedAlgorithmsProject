@@ -1,5 +1,7 @@
 package cs451.client;
 
+import cs451.ConfigParser;
+
 import java.io.FileNotFoundException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -7,69 +9,89 @@ import java.net.InetAddress;
 import java.net.SocketException;
 import java.util.*;
 
+import static cs451.Parameters.MAX_COMPRESSION;
+import static cs451.Parameters.PROPOSAL_BATCH;
+
 public class Manager extends Client{
 
+    public static final LinkedList<ArrayList<Integer>> originals = new LinkedList<>();
+
     private int id;
+    private int finished = 0;
     private int messagePerPacket = 8;
     private final DatagramSocket socket;
     private final HashMap<String, Integer> addressToId;
     private final InetAddress[] idToAddress;
     private final int[] idToPort;
-    private final int[] lastMessage;
-    private final int[] lastLog;
-    private int lastSentLog = 0;
-    private int m;
+    private int last;
+    private int lastSSent = 0;
+    private int lastCleaned = 0;
     private int n;
-    private ArrayList<SavedMessage> messageQueue = new ArrayList<>();
-    private ArrayList<TreeSet<Integer>> ackMessages = new ArrayList<>();
     private Log log;
-    private HashMap<String, HashSet<Integer>> ackCount = new HashMap<>();
-    private HashMap<String, HashSet<Integer>> ackSendCount = new HashMap<>();
-    private int[] tmpLog;
-    private int lastSSent = -1;
+    private final HashMap<Integer, HashSet<Integer>> acceptorSet;
+    private final HashMap<Integer, StringBuilder> acceptorBuffer;
+    private final HashMap<Integer, Proposal> proposals;
+    private final HashMap<Integer, Integer>[] processResponses;
+    private final HashMap<Integer, HashSet<Integer>> numberDecided = new HashMap<>();
+    private final TreeSet<Integer> isHere;
+    private int lastIndex;
+    private  Iterator<Integer> iterator;
 
-    public Manager(int id, int m, int n, int port, HashMap<String, Integer> addressToId, InetAddress[] idToAddress, int[] idToPort, String outputPath) throws SocketException, FileNotFoundException {
+    public Manager(int id, int n, int port, HashMap<String, Integer> addressToId, InetAddress[] idToAddress, int[] idToPort, String outputPath) throws SocketException, FileNotFoundException {
         this.id = id;
-        this.m = m;
         this.n = n;
+        this.lastIndex = 0;
         this.socket = new DatagramSocket(port);
         this.addressToId = addressToId;
         this.idToAddress = idToAddress;
-        lastMessage = new int[n];
-        lastLog = new int[n];
         this.idToPort = idToPort;
-        for(int i = 0; i < n; i++){
-            ackMessages.add(new TreeSet<>());
-        }
+        this.last = 0;
+        this.acceptorBuffer = new HashMap<>();
+        this.acceptorSet = new HashMap<>();
+        this.proposals = new HashMap<>();
+        this.isHere = new TreeSet<>();
+        iterator = isHere.iterator();
         log = new Log(outputPath);
-        tmpLog = new int[n];
+        processResponses = new HashMap[n];
+
+        loadNext();
     }
 
     @Override
     public void run() {
-        Sender sender = new Sender(id, m, n, socket, this);
-        sender.start();
-        for (int i = 0; i < 2; i++){
+        for (int i = 0; i < 3; i++){
             SSender sSender = new SSender(id, n, socket, this);
             sSender.start();
         }
-        for (int i = 0; i < 3; i++){
+        for (int i = 0; i < 4; i++){
             Receiver receiver = new Receiver(socket, this);
             receiver.start();
         }
-        new Thread(() -> {
-            while (true){
-                try {
-                    Thread.sleep(300);
-                } catch (InterruptedException ignored) {}
-                processLog();
-            }
-        }).start();
         while (true){
             try {
-                Thread.sleep(50);
+                Thread.sleep(300);
             } catch (InterruptedException ignored) {}
-            handleAckMessages();
+            handleDecidedMessages();
+            if (finished >= Math.min(MAX_COMPRESSION, PROPOSAL_BATCH)) {
+                if (ConfigParser.readProposals()) {
+                    loadNext();
+                }
+                finished = 0;
+            }
+            while (lastCleaned < last && numberDecided.getOrDefault(lastCleaned, new HashSet<>()).size() == n){
+                synchronized (this){
+                    isHere.remove(lastCleaned);
+                    acceptorSet.remove(lastCleaned);
+                    acceptorBuffer.remove(lastCleaned);
+                    proposals.remove(lastCleaned);
+                    for (int i = 0; i < n; i++){
+                        processResponses[i].remove(lastCleaned);
+                    }
+                    numberDecided.remove(lastCleaned);
+                }
+
+                lastCleaned++;
+            }
         }
     }
 
@@ -82,111 +104,109 @@ public class Manager extends Client{
         return idToPort[id];
     }
 
-    public synchronized void addSavedMessage(SavedMessage savedMessage) {
-        messageQueue.add(savedMessage);
-    }
-
-    public SavedMessage getMessage() throws Exception {
-        int tmp;
-        synchronized (this){
-            if (lastSSent < 0){
-                lastSSent = messageQueue.size() - 1;
-            }
-            else {
-                lastSSent = lastSSent - 1;
-            }
-            tmp = lastSSent;
-        }
-        if(tmp == -1){
-            throw new Exception();
-        }
-        SavedMessage message = messageQueue.get(tmp);
-        return message;
-    }
-
-    private void processLog() {
-        StringBuilder stringBuilder = new StringBuilder();
-        for(int i = 0; i < n; i++){
-            if (lastLog[i] >= lastMessage[i]){
-                continue;
-            }
-            String senderId = "d " + (i + 1) + " ";
-            tmpLog[i] = lastMessage[i];
-            for(int j = lastLog[i] + 1; j <= tmpLog[i]; j++){
-                stringBuilder.append(senderId).append(j).append("\n");
-            }
-        }
-        for (int i = 0; i < n; i++){
-            lastLog[i] = tmpLog[i];
-        }
-        if (stringBuilder.length() == 0){
+    public void checkDecide(Proposal proposal){
+        if (!proposal.isActive()){
             return;
         }
-        log.add(stringBuilder, false);
+        int ackCount = proposal.getAckCount();
+        int nackCount = proposal.getNackCount();
+        if(ackCount >= n / 2){
+            proposal.setActive(false);
+            ++finished;
+        }
+        else if (nackCount + ackCount >= n / 2){
+            proposal.clear();
+        }
     }
 
     public void handleReceivedMessage(String localBuffer, InetAddress address, int port) {
-        String[] strings = localBuffer.split(" ");
+        String[] strings = localBuffer.split(",");
         int senderId = addressToId.get(address.getHostAddress() + " " + port);
-        int first = Integer.parseInt(strings[1]);
-        int last = Integer.parseInt(strings[strings.length - 1]);
-        int messageId = Integer.parseInt(strings[0]);
-        SavedMessage savedMessage = null;
-        int num;
-        String key;
-        int idTmp = messageId;
-        if (messageId < 0){
-            messageId = -messageId;
-            key = messageId + " " + strings[1];
-            HashSet<Integer> set;
-            synchronized (ackSendCount){
-                if(ackSendCount.containsKey(key)){
-                    set = ackSendCount.get(key);
-                }
-                else {
-                    set = new HashSet<>();
-                    ackSendCount.put(key, set);
-                }
-                set.add(senderId);
-            }
-        }
-        else {
-            key = messageId + " " + strings[1];
-            HashSet<Integer> set;
-            boolean firstTime = true;
-            synchronized (ackCount){
-                if(ackCount.containsKey(key)){
-                    set = ackCount.get(key);
-                }
-                else {
-                    set = new HashSet<>();
-                    ackCount.put(key, set);
-                    if (messageId != id){
-                        savedMessage = new SavedMessage(messageId, first, localBuffer.getBytes());
+        StringBuilder ackNaks = new StringBuilder();
+
+        for (int i = 0; i < strings.length; i++){
+            String[] request = strings[i].split(" ");
+            int type = Integer.parseInt(request[0]);
+            int proposalId = Integer.parseInt(request[1]);
+            if (type == 3){
+                HashSet<Integer> set;
+                synchronized (numberDecided){
+                    set = numberDecided.getOrDefault(proposalId, null);
+                    if (set == null){
+                        set = new HashSet<>();
+                        numberDecided.put(proposalId, set);
                     }
                 }
-                if (set.contains(senderId)){
-                    firstTime = false;
-                }
-                else {
+                synchronized (set){
                     set.add(senderId);
                 }
-                num = set.size();
+                ackNaks.append("-3 ").append(proposalId).append(",");
+                continue;
             }
-            if(firstTime && num == n / 2){
-                synchronized (idToAddress[messageId - 1]){
-                    ackMessages.get(messageId - 1).add(last);
+            if (type == -3){
+                Proposal proposal = proposals.getOrDefault(proposalId, null);
+                if (proposal == null){
+                    continue;
+                }
+                synchronized (proposal){
+                    proposal.addDelivered(senderId);
                 }
             }
-            if(savedMessage != null){
-                addSavedMessage(savedMessage);
+            int proposalNumber = Integer.parseInt(request[2]);
+            if (type == 0){
+                //propose
+                ArrayList<Integer> set = new ArrayList<>();
+                for (int j = 3; j < request.length; j++){
+                    set.add(Integer.parseInt(request[j]));
+                }
+                try {
+                    if (acceptorCheck(set, proposalId)){
+                        //send ack
+                        ackNaks.append("1 ").append(proposalId).append(" ").append(proposalNumber).append(",");
+                    }
+                    else {
+                        //send nack
+                        StringBuilder acBuffer = acceptorBuffer.get(proposalId);
+                        synchronized (acBuffer){
+                            ackNaks.append("2 ").append(proposalId).append(" ").append(proposalNumber).append(" ").append(acBuffer).append(",");
+                        }
+                    }
+                } catch (Exception e) {}
             }
-            String ackString = idTmp < 0 ? localBuffer : ("-" + localBuffer);
-            sendAck(ackString.getBytes(), senderId);
+            else{
+                Proposal proposal = proposals.getOrDefault(proposalId, null);
+                if (proposal == null){
+                    continue;
+                }
+                synchronized (proposal){
+                    if (!proposal.isActive() || proposal.getActiveProposalNumber() != proposalNumber){
+                        continue;
+                    }
+                    if (type == 1){
+                        //ack
+                        proposal.addAckCount(senderId);
+                    }
+                    else if (type == 2){
+                        //nack
+                        ArrayList<Integer> set = new ArrayList<>();
+                        for (int j = 3; j < request.length; j++){
+                            set.add(Integer.parseInt(request[j]));
+                        }
+                        proposal.addProposedValue(set);
+                        proposal.addNackCount(senderId);
+                    }
+                    processResponses[senderId - 1].put(proposalId, proposalNumber);
+                    checkDecide(proposal);
+                }
+            }
+        }
+        if (ackNaks.length() > 0){
+            ackNaks.deleteCharAt(ackNaks.length() - 1);
+            sendAckNack(ackNaks.toString().getBytes(), senderId);
         }
     }
 
-    private void sendAck(byte[] buf, int senderId) {
+    private void sendAckNack(byte[] buf, int senderId) {
         InetAddress address = idToAddress[senderId - 1];
         int port = idToPort[senderId - 1];
         DatagramPacket packet = new DatagramPacket(buf, buf.length, address, port);
@@ -195,51 +215,80 @@ public class Manager extends Client{
         } catch (Exception ignored) {}
     }
 
-    public void handleAckMessages() {
-        for(int i = 0; i < n; i++){
-            synchronized (idToAddress[i]){
-                TreeSet<Integer> acks = ackMessages.get(i);
-                while (true){
-                    if(acks.isEmpty()){
-                        break;
+    public void handleDecidedMessages() {
+        Proposal proposal = proposals.getOrDefault(last, null);
+        if (proposal == null){
+            return;
+        }
+        StringBuilder stringBuilder = new StringBuilder();
+        while (!proposal.isActive()){
+            stringBuilder.append(proposal.getMessage().append('\n'));
+            last++;
+        }
+        log.add(stringBuilder);
+    }
+
+    public boolean acceptorCheck(ArrayList<Integer> set, int proposalId) throws Exception {
+        Set<Integer> acSet = acceptorSet.getOrDefault(proposalId, null);
+        StringBuilder acBuffer = acceptorBuffer.getOrDefault(proposalId, null);
+        if (acSet == null || acBuffer == null){
+            throw new Exception("Acceptor not found");
+        }
+        synchronized (acSet){
+            boolean ack = true;
+            for (int value : set) {
+                if (!acSet.contains(value)) {
+                    acSet.add(value);
+                    synchronized (acBuffer){
+                        acBuffer.append(" ").append(value);
                     }
-                    int smallest = acks.first();
-                    if(smallest - lastMessage[i] > messagePerPacket){
-                        break;
-                    }
-                    acks.pollFirst();
-                    lastMessage[i] = smallest;
+                    ack = false;
                 }
             }
+            return ack;
         }
     }
 
-    public void logSentMessages(int lastSent) {
-        StringBuilder stringBuilder = new StringBuilder();
-        for(int i = lastSentLog + 1; i <= lastSent; i++){
-            stringBuilder.append("b ").append(i).append("\n");
-        }
-        log.add(stringBuilder, true);
-        lastSentLog = lastSent;
-    }
+    public synchronized Proposal getProposal(){
+        synchronized (this){
+            if (iterator.hasNext()) {
+                // Get the next element
+                int element = iterator.next();
 
-    public HashSet<Integer> getAckSendCount(String key){
-        try {
-            return ackSendCount.get(key);
-        } catch (Exception e){
-            try{
-                return ackSendCount.get(key);
-            } catch (Exception e1){
-                System.out.println("Error in getAckCount");
-                return new HashSet<>();
+                // Do something with the element
+                return proposals.get(element);
             }
+            else {
+                if (isHere.isEmpty()){
+                    return null;
+                }
+                iterator = isHere.iterator();
+            }
+            return proposals.get(iterator.next());
+        }
+    }
+
+    private void loadNext() {
+        Iterator<ArrayList<Integer>> iterator = originals.listIterator();
+        while (iterator.hasNext()) {
+            ArrayList<Integer> arrayList = iterator.next();
+            iterator.remove();
+            synchronized (this){
+                acceptorBuffer.put(lastIndex, new StringBuilder());
+                acceptorSet.put(lastIndex, new HashSet<>());
+                try{
+                    acceptorCheck(arrayList, lastIndex);
+                } catch (Exception e) {}
+                proposals.put(lastIndex, new Proposal(lastIndex, arrayList));
+                isHere.add(lastIndex);
+            }
+            lastIndex++;
         }
     }
 
     @Override
     public void clearBuffer() {
-        handleAckMessages();
-        processLog();
+        handleDecidedMessages();
         log.close();
         socket.close();
     }
