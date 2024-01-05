@@ -69,9 +69,6 @@ public class Manager extends Client{
             Receiver receiver = new Receiver(socket, this);
             receiver.start();
         }
-        for (Proposal proposal : proposals.values()){
-//            System.out.println(proposal);
-        }
         while (true){
 //            System.out.println("Finished: " + finished + " Last: " + last + " LastCleaned: " + lastCleaned);
             try {

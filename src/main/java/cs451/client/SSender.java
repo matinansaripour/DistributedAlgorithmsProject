@@ -19,6 +19,9 @@ public class SSender extends Thread {
     public void run() {
         while (true) {
             Proposal proposal = manager.getProposal();
+            if(proposal == null){
+                continue;
+            }
             String messageToSend = proposal.getMessageToSend();
             for(int i = 0; i < n; i++){
                 if(i == id - 1){
